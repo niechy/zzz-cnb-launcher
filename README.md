@@ -50,4 +50,4 @@ $env:CGO_ENABLED='0'
 go build -trimpath -ldflags='-s -w' -o ZZZ-CNB-Launcher.exe .
 ```
 
-项目采用 GPL-3.0 许可证。这不是 OneDragon-Anything 或 Mirror酱官方产品；上游程序、模型和发布资产的权利归各自贡献者所有。
+项目采用 GPL-3.0 许可证。这不是 OneDragon-Anything 官方产品；上游程序、模型和发布资产的权利归各自贡献者所有。
