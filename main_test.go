@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUpsertYAML(t *testing.T) {
@@ -272,6 +273,26 @@ func TestGetLauncherVersionRealExecutable(t *testing.T) {
 	if actual := getLauncherVersion(path); actual != "v2.5.1" {
 		t.Fatalf("expected v2.5.1, got %q", actual)
 	}
+}
+
+func TestStartLauncherUsesWindowsShell(t *testing.T) {
+	root := t.TempDir()
+	marker := filepath.Join(root, "started.txt")
+	script := filepath.Join(root, "launcher.cmd")
+	content := "@echo off\r\necho started>\"" + marker + "\"\r\n"
+	if err := os.WriteFile(script, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := startLauncher(script, root); err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 30; attempt++ {
+		if fileExists(marker) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("launcher process did not start")
 }
 
 func TestCompareLauncherVersions(t *testing.T) {
