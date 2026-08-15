@@ -1,0 +1,51 @@
+name: build-and-release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+      - name: Test
+        shell: pwsh
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Build
+        shell: pwsh
+        run: |
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "1.2.0-dev" }
+          go build -trimpath -ldflags "-s -w -X main.appVersion=$version" -o ZZZ-CNB-Launcher.exe .
+          $hash = (Get-FileHash ZZZ-CNB-Launcher.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item ZZZ-CNB-Launcher.exe).Length
+          $manifest = [ordered]@{ version=$version; name="ZZZ-CNB-Launcher.exe"; size=$size; sha256=$hash }
+          $manifest | ConvertTo-Json | Set-Content launcher-app-manifest.json -Encoding utf8
+          "$hash  ZZZ-CNB-Launcher.exe" | Set-Content ZZZ-CNB-Launcher-SHA256.txt -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZZZ-CNB-Launcher
+          path: |
+            ZZZ-CNB-Launcher.exe
+            launcher-app-manifest.json
+            ZZZ-CNB-Launcher-SHA256.txt
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ZZZ-CNB-Launcher.exe
+            launcher-app-manifest.json
+            ZZZ-CNB-Launcher-SHA256.txt
