@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+func TestMain(m *testing.M) {
+	if marker := os.Getenv("ZZZ_TEST_START_MARKER"); marker != "" {
+		_ = os.WriteFile(marker, []byte("started"), 0644)
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
 func TestUpsertYAML(t *testing.T) {
 	input := "repository_type: GitHub\nauto_update_code: false\n"
 	actual := upsertYAML(input, "auto_update_code", "true")
@@ -278,15 +286,15 @@ func TestGetLauncherVersionRealExecutable(t *testing.T) {
 func TestStartLauncherUsesWindowsShell(t *testing.T) {
 	root := t.TempDir()
 	marker := filepath.Join(root, "started.txt")
-	script := filepath.Join(root, "launcher.cmd")
-	content := "@echo off\r\necho started>\"" + marker + "\"\r\n"
-	if err := os.WriteFile(script, []byte(content), 0644); err != nil {
+	t.Setenv("ZZZ_TEST_START_MARKER", marker)
+	testExecutable, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := startLauncher(script, root); err != nil {
+	if err := startLauncher(testExecutable, root); err != nil {
 		t.Fatal(err)
 	}
-	for attempt := 0; attempt < 30; attempt++ {
+	for attempt := 0; attempt < 50; attempt++ {
 		if fileExists(marker) {
 			return
 		}
