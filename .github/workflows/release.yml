@@ -26,7 +26,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "1.2.0-dev" }
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "1.2.1-dev" }
           go build -trimpath -ldflags "-s -w -X main.appVersion=$version" -o ZZZ-CNB-Launcher.exe .
           $hash = (Get-FileHash ZZZ-CNB-Launcher.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           $size = (Get-Item ZZZ-CNB-Launcher.exe).Length

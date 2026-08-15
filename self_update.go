@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -94,12 +93,6 @@ func scheduleSelfReplace(newPath, currentPath string) error {
 	return nil
 }
 
-func quoteCmdPath(path string) string {
-	// Paths come from os.Executable and the local installation directory.
-	// Double quotes are not valid in Windows file names, so quoting is enough.
-	return `"` + strings.ReplaceAll(path, `"`, ``) + `"`
-}
-
 func runSelfReplacement() error {
 	if len(os.Args) < 3 {
 		return errors.New("自更新缺少目标路径")
@@ -155,8 +148,7 @@ func copyFile(source, destination string) error {
 }
 
 func startLauncher(path, workDir string) error {
-	command := fmt.Sprintf("start \"\" %s", quoteCmdPath(path))
-	cmd := exec.Command("cmd.exe", "/d", "/c", command)
+	cmd := exec.Command("cmd.exe", "/d", "/c", "start", "", path)
 	cmd.Dir = workDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	return cmd.Start()

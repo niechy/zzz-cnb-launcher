@@ -26,7 +26,7 @@ const (
 	cnbModelAssets = "https://cnb.cool/cc-public-assets/release-assets/-/releases/download/models"
 )
 
-var appVersion = "1.2.0"
+var appVersion = "1.2.1"
 
 var embeddedProjectConfig = `project_name: "ZenlessZoneZero-OneDragon"
 python_version: "3.11"
