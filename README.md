@@ -16,6 +16,12 @@
 6. 检查本启动器自身版本；有新版本时校验 EXE，由独立更新进程循环等待旧程序退出，替换成功后自动重启。
 7. 识别原版启动器版本时优先执行官方支持的 `--version`，并隔离 PyInstaller 环境；PE 文件版本仅作为后备。
 
+## 匿名遥测
+
+为确认不同网络环境中的实际成功率，程序默认向 `http://47.104.196.213:8080` 发送最小化的匿名运行结果，失败时回退到 `https://47.104.196.213:8443`。只包含随机安装 ID、启动器版本、执行阶段、成功或失败、经过归类的错误代码和耗时；不发送 Windows 用户名、安装路径、游戏账号、令牌或原始日志正文。
+
+可通过 `--disable-telemetry` 关闭，或在 EXE 同目录创建空文件 `ZZZ-CNB-Launcher.telemetry-disabled` 永久关闭。遥测失败不会影响下载、更新或启动流程。明文 HTTP 只传输上述脱敏字段；HTTPS 后备端点使用固定证书公钥校验。接收端源码位于 `telemetry-server`。
+
 程序不会修改 Python 源码。新版 ZZZ 已原生支持 CNB 时，不修改 `project.yml` 的仓库架构；同时会清理 1.1 曾注入的废弃字段，并保留用户的代码源、分支和其他设置。模型准备完成后，仅更新 `config/model.yml` 中仍由上游使用的四个模型选择。
 
 ## 可选镜像
@@ -37,6 +43,7 @@ https://your-proxy.example/{url}
 ZZZ-CNB-Launcher.exe --prepare-only
 ZZZ-CNB-Launcher.exe --skip-models
 ZZZ-CNB-Launcher.exe --skip-launcher-update
+ZZZ-CNB-Launcher.exe --disable-telemetry
 ZZZ-CNB-Launcher.exe --version
 ZZZ-CNB-Launcher.exe --root D:\Path\To\ZZZ
 ```

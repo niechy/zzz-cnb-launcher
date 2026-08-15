@@ -26,7 +26,7 @@ const (
 	cnbModelAssets = "https://cnb.cool/cc-public-assets/release-assets/-/releases/download/models"
 )
 
-var appVersion = "1.2.1"
+var appVersion = "1.3.0"
 
 var embeddedProjectConfig = `project_name: "ZenlessZoneZero-OneDragon"
 python_version: "3.11"
@@ -128,6 +128,7 @@ type options struct {
 	prepareOnly        bool
 	skipModels         bool
 	skipLauncherUpdate bool
+	disableTelemetry   bool
 	showVersion        bool
 	noPause            bool
 }
@@ -145,16 +146,26 @@ func main() {
 		fmt.Printf("%s v%s\n", appName, strings.TrimPrefix(appVersion, "v"))
 		return
 	}
-	if err := run(opts); err != nil {
+	telemetry := newTelemetryClient(opts.disableTelemetry)
+	if telemetry.enabled {
+		fmt.Println("[遥测] 仅发送匿名运行结果；可用 --disable-telemetry 或同目录禁用标记关闭。")
+	}
+	telemetry.record("app_start", "startup", "started", "", "", time.Time{})
+	if err := run(opts, telemetry); err != nil {
 		if errors.Is(err, errSelfUpdateStarted) {
+			telemetry.flush(1500 * time.Millisecond)
 			return
 		}
+		telemetry.record("app_finish", "run", "failure", telemetryErrorCode(err), "", time.Time{})
 		fmt.Printf("\n[失败] %v\n", err)
 		if !opts.noPause {
 			pause()
 		}
+		telemetry.flush(1500 * time.Millisecond)
 		os.Exit(1)
 	}
+	telemetry.record("app_finish", "run", "success", "", "", time.Time{})
+	telemetry.flush(1500 * time.Millisecond)
 }
 
 func parseFlags() options {
@@ -163,24 +174,30 @@ func parseFlags() options {
 	flag.BoolVar(&opts.prepareOnly, "prepare-only", false, "只转换和下载，不启动主程序")
 	flag.BoolVar(&opts.skipModels, "skip-models", false, "跳过模型检查与下载")
 	flag.BoolVar(&opts.skipLauncherUpdate, "skip-launcher-update", false, "跳过原版启动器更新检查")
+	flag.BoolVar(&opts.disableTelemetry, "disable-telemetry", false, "关闭匿名运行遥测")
 	flag.BoolVar(&opts.showVersion, "version", false, "显示版本号")
 	flag.BoolVar(&opts.noPause, "no-pause", false, "出错时不等待按键")
 	flag.Parse()
 	return opts
 }
 
-func run(opts options) error {
+func run(opts options, telemetry *telemetryClient) error {
 	root, err := resolveRoot(opts.root)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("%s\n目录：%s\n\n", appName, root)
+	started := time.Now()
 	if updated, updateErr := ensureSelfCurrent(root); updateErr != nil {
+		telemetry.record("self_update_check", "self_update", "failure", telemetryErrorCode(updateErr), "", started)
 		fmt.Printf("[自更新] 暂时无法检查：%v\n", updateErr)
 	} else if updated {
+		telemetry.record("self_update_check", "self_update", "success", "", "", started)
 		fmt.Println("[自更新] 已下载新版，程序将自动重启。")
 		return errSelfUpdateStarted
+	} else {
+		telemetry.record("self_update_check", "self_update", "success", "", "", started)
 	}
 	launcher, err := findLauncher(root)
 	if err != nil {
@@ -188,42 +205,59 @@ func run(opts options) error {
 	}
 
 	fmt.Println("[1/4] 检查代码源并保持自动更新...")
+	started = time.Now()
 	if err := configureCNB(root); err != nil {
+		telemetry.record("configuration_result", "configure", "failure", telemetryErrorCode(err), "", started)
 		return fmt.Errorf("配置 CNB 失败：%w", err)
 	}
+	telemetry.record("configuration_result", "configure", "success", "", "", started)
 	fmt.Println("      已完成。以后请继续通过本启动器打开一条龙。")
 
 	if opts.skipModels {
+		telemetry.record("model_prepare_result", "models", "skipped", "", "", time.Time{})
 		fmt.Println("[2/4] 已按参数跳过模型检查。")
 	} else {
 		fmt.Println("[2/4] 检查模型，已有完整文件不会重复下载...")
+		started = time.Now()
 		if err := ensureModels(root); err != nil {
+			telemetry.record("model_prepare_result", "models", "failure", telemetryErrorCode(err), "", started)
 			return fmt.Errorf("模型准备失败：%w", err)
 		}
+		telemetry.record("model_prepare_result", "models", "success", "", "", started)
 	}
 
 	if opts.skipLauncherUpdate {
+		telemetry.record("launcher_update_result", "launcher_update", "skipped", "", "", time.Time{})
 		fmt.Println("[3/4] 已按参数跳过原版启动器更新检查。")
 	} else {
 		fmt.Println("[3/4] 检查原版启动器更新...")
+		started = time.Now()
 		updated, updateErr := ensureLauncherCurrent(root, launcher)
 		if updateErr != nil {
+			telemetry.record("launcher_update_result", "launcher_update", "failure", telemetryErrorCode(updateErr), "", started)
 			fmt.Printf("      [提示] 暂时无法更新原版启动器：%v\n", updateErr)
 			fmt.Println("      将继续使用当前版本，不影响代码和模型自动更新。")
 		} else if updated {
+			telemetry.record("launcher_update_result", "launcher_update", "success", "", "", started)
 			fmt.Println("      [完成] 原版启动器已更新。")
+		} else {
+			telemetry.record("launcher_update_result", "launcher_update", "success", "", "", started)
 		}
 	}
 
 	if opts.prepareOnly {
+		telemetry.record("zzz_launch_result", "launch", "skipped", "", "", time.Time{})
 		fmt.Println("[4/4] 准备完成（未启动主程序）。")
 		return nil
 	}
 
 	fmt.Printf("[4/4] 启动 %s...\n", filepath.Base(launcher))
+	started = time.Now()
 	if err := startLauncher(launcher, root); err != nil {
+		telemetry.record("zzz_launch_result", "launch", "failure", telemetryErrorCode(err), "", started)
 		return fmt.Errorf("无法启动主程序：%w", err)
 	}
+	telemetry.record("zzz_launch_result", "launch", "success", "", "", started)
 	return nil
 }
 
